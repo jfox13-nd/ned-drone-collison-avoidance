@@ -8,13 +8,45 @@ Added code for flying using NED Velocity Vectors - Jane Cleland-Huang 1/15/18
 import math
 import os
 import time
-from math import sin, cos, atan2, radians, sqrt
+import geopy
+from math import sin, cos, atan2, radians, sqrt, hypot
+from random import randrange
 
 from dronekit import Vehicle, connect, VehicleMode, LocationGlobalRelative
 from dronekit_sitl import SITL
 
 from flight_plotter import Location, CoordinateLogger, GraphPlotter
-from ned_utilities import ned_controller
+from ned_utilities import ned_controller, Nedvalues
+
+class Drone(Object):
+
+    def __init__(self, vehicle, ned):
+        self.ned = ned
+        self.vehicle = vehicle
+        self.target = Nedvalues()
+
+    def get_magnitude(self):
+        return sqrt( (self.ned.north**2) + (self.ned.east**2) + (self.ned.down**2) )
+    
+    def random_nudge(self):
+        mag = self.get_magnitude()
+        nudge_mag = mag / 10
+        vector_to_nudge = randrange(3)
+
+        new_ned = Nedvalues()
+        new_ned.north = self.ned.north
+        new_ned.east = self.ned.east
+        new_ned.down = self.ned.down
+        neg_or_pos = randrange(1)
+        if neg_or_pos == 0:
+            neg_or_pos = -1
+
+        if vector_to_nudge == 0:
+            new_ned.north += neg_or_pos * nudge_mag
+
+        return new_ned
+            
+        
 
 ################################################################################################
 # Standard Connect
@@ -45,7 +77,7 @@ def connect_virtual_vehicle(instance, home):
 # parameters: 	target altitude (e.g., 10, 20)
 # returns:	n/a
 
-def arm_and_takeoff(aTargetAltitude):
+def arm_and_takeoff(aTargetAltitude, vehicle):
     """
     Arms vehicle and fly to aTargetAltitude.
     """
@@ -79,6 +111,12 @@ def arm_and_takeoff(aTargetAltitude):
         time.sleep(1)
 
 
+def get_3d_distance_meters(location_a: LocationGlobalRelative, location_b: LocationGlobalRelative) -> float:
+    horizontal_distance = get_distance_meters(location_a,location_b)
+    vertical_distance = abs(location_a.alt - location_b.alt)
+    return hypot(horizontal_distance, vertical_distance)
+
+
 ################################################################################################
 # function:    Get distance in meters
 # parameters:  Two global relative locations
@@ -105,12 +143,25 @@ def get_distance_meters(locationA, locationB):
     return distance
 
 
+def drone_vector(drone_a, drone_b):
+    opposite_direction_vector = nedcontroller.setNed(drone_b.vehicle.global_relative_frame, drone_a.vehicle.global_relative_frame)
+
+
 ############################################################################################
 # Main functionality: Example of one NED command
 ############################################################################################
+drones = []
 
 vehicle, sitl = connect_virtual_vehicle(1,([41.714436,-86.241713,0])) 
-arm_and_takeoff(10)
+drones.append(Drone(vehicle,Nedvalues()))
+
+vehicle, sitl = connect_virtual_vehicle(1,([41.714500,-86.241600,0])) 
+drones.append(Drone(vehicle,Nedvalues()))
+
+for drone in drones:
+    arm_and_takeoff(10, drone.vehicle)
+
+
 startingLocation = Location(vehicle.location.global_relative_frame.lat, vehicle.location.global_relative_frame.lon)
 targetLocation = LocationGlobalRelative(41.714500,-86.241600,0)
 totalDistance = get_distance_meters(startingLocation,targetLocation)
