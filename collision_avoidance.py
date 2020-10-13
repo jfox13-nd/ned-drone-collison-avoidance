@@ -11,6 +11,7 @@ import time
 import geopy
 from math import sin, cos, atan2, radians, sqrt, hypot
 from random import randrange
+import animation
 
 from dronekit import Vehicle, connect, VehicleMode, LocationGlobalRelative
 from dronekit_sitl import SITL
@@ -18,20 +19,27 @@ from dronekit_sitl import SITL
 from flight_plotter import Location, CoordinateLogger, GraphPlotter
 from ned_utilities import ned_controller, Nedvalues
 
-class Drone(Object):
+R_EARTH = 6378.137
+MIN_DISTANCE = 5       # minimum separation distance 
+
+class Drone:
+
+    nedcontroller = ned_controller()
 
     def __init__(self, vehicle, ned):
         self.ned = ned
         self.vehicle = vehicle
         self.target = Nedvalues()
+        self.nudge = None
+        self.ontrack = False
 
     def get_magnitude(self):
         return sqrt( (self.ned.north**2) + (self.ned.east**2) + (self.ned.down**2) )
     
-    def random_nudge(self):
+    def set_random_nudge(self):
         mag = self.get_magnitude()
-        nudge_mag = mag / 10
-        vector_to_nudge = randrange(3)
+        nudge_mag = mag / 100
+        vector_to_nudge = randrange(2)
 
         new_ned = Nedvalues()
         new_ned.north = self.ned.north
@@ -43,9 +51,64 @@ class Drone(Object):
 
         if vector_to_nudge == 0:
             new_ned.north += neg_or_pos * nudge_mag
+        else: 
+            new_ned.east += neg_or_pos * nudge_mag
 
-        return new_ned
-            
+        self.nudge = new_ned
+
+    def drone_vector(self, drone_b):
+        ''' this method returns a ned vector for drone a that avoids collision of a drone b '''
+        dv = Drone.nedcontroller.setNed(drone_b.vehicle.location.global_relative_frame, self.vehicle.location.global_relative_frame)
+        new_mag = sqrt( (dv.north**2) + (dv.east**2) + (dv.down**2) )
+        dv.north /= new_mag
+        dv.east /= new_mag
+        dv.down /= new_mag
+
+        dv.north *= self.get_magnitude()
+        dv.east *= self.get_magnitude()
+        dv.down *= self.get_magnitude()
+        return dv
+
+    def set_and_send_ned(self, ned): 
+        ''' gives the drone a new velocity vector using NED + sets its internal ned attribute '''
+        self.ned = ned
+        Drone.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
+
+    def send_ned(self, ned): 
+        ''' sends the drone to a new velocity vector using NED '''
+        Drone.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
+
+    def send_to_location(self, location):
+        ''' sends drone to location using NED '''
+        self.set_and_send_ned(Drone.nedcontroller.setNed(self.vehicle.location.global_relative_frame, location))
+
+    def within_range(self, drone_b): 
+        ''' this method checks to see if our drones are within the minimum separation distance '''
+        return get_distance_meters(self.vehicle.location.global_relative_frame, drone_b.vehicle.location.global_relative_frame) < MIN_DISTANCE        
+
+    def combine_ned(self, ned, added_ned): 
+        ned.north += added_ned.north
+        ned.east += added_ned.east
+        ned.down += added_ned.down
+
+    def avoid_collision(self, drone_b): 
+        ''' call this repeatedly in main to check if drones are within range '''
+        if self.within_range(drone_b):      # if the two drones are within range...
+            self.ontrack = False
+            if not self.nudge:                  # if no nudge has yet been set...
+                self.set_random_nudge()             # set a random nudge 
+            new_ned = Nedvalues()
+            self.combine_ned(new_ned, self.nudge)
+            self.combine_ned(new_ned, self.ned)
+            # self.combine_ned(new_ned, self.drone_vector(drone_b))
+            self.send_ned(new_ned) 
+
+
+        else: 
+            self.nudge = None               # if out of range, no longer need a nudge 
+            if not self.ontrack: 
+                self.send_ned(self.ned)         # reroute to the OG ned 
+                self.ontrack = True
         
 
 ################################################################################################
@@ -111,10 +174,10 @@ def arm_and_takeoff(aTargetAltitude, vehicle):
         time.sleep(1)
 
 
-def get_3d_distance_meters(location_a: LocationGlobalRelative, location_b: LocationGlobalRelative) -> float:
-    horizontal_distance = get_distance_meters(location_a,location_b)
-    vertical_distance = abs(location_a.alt - location_b.alt)
-    return hypot(horizontal_distance, vertical_distance)
+# def get_3d_distance_meters(location_a: LocationGlobalRelative, location_b: LocationGlobalRelative) -> float:
+#     horizontal_distance = get_distance_meters(location_a,location_b)
+#     vertical_distance = abs(location_a.alt - location_b.alt)
+#     return hypot(horizontal_distance, vertical_distance)
 
 
 ################################################################################################
@@ -143,25 +206,62 @@ def get_distance_meters(locationA, locationB):
     return distance
 
 
-def drone_vector(drone_a, drone_b):
-    opposite_direction_vector = nedcontroller.setNed(drone_b.vehicle.global_relative_frame, drone_a.vehicle.global_relative_frame)
-
+def get_coords(latitude, longitude, dx, dy):
+    dx = dx / 1000
+    dy = dy / 1000
+    new_latitude = latitude + (dy / R_EARTH) * (180 / math.pi)
+    new_longitude = longitude + (dx / R_EARTH) * (180 / math.pi) / math.cos(latitude * math.pi/180)
+    return [new_latitude, new_longitude, 0]
 
 ############################################################################################
 # Main functionality: Example of one NED command
 ############################################################################################
 drones = []
+coordinates = []
 
-vehicle, sitl = connect_virtual_vehicle(1,([41.714436,-86.241713,0])) 
+#starting_coords = [41.714436,-86.241713,0]
+#test_coords_1 = get_coords(starting_coords[0], starting_coords[1], 40, 0)
+
+starting_coords = [41.714841, -86.241941, 0]
+test_coords_1 = [41.715092, -86.241546, 0]
+
+test_coords_2 = get_coords(starting_coords[0], starting_coords[1], 0, 40)
+test_coords_3 = get_coords(starting_coords[0], starting_coords[1], 28, 28)
+
+vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
 drones.append(Drone(vehicle,Nedvalues()))
 
-vehicle, sitl = connect_virtual_vehicle(1,([41.714500,-86.241600,0])) 
+vehicle, sitl = connect_virtual_vehicle(2,(test_coords_1)) 
 drones.append(Drone(vehicle,Nedvalues()))
 
 for drone in drones:
     arm_and_takeoff(10, drone.vehicle)
 
+time.sleep(10)
 
+drones[0].send_to_location(Location(test_coords_1[0], test_coords_1[1]))
+drones[1].send_to_location(Location(starting_coords[0], starting_coords[1]))
+
+start_time = time.time()
+while time.time() - start_time < 15: 
+
+    # save coordinates to plot 
+    coordinates.append([(drones[0].vehicle.location.global_relative_frame.lat, 
+        drones[0].vehicle.location.global_relative_frame.lon), 
+        (drones[1].vehicle.location.global_relative_frame.lat, 
+        drones[1].vehicle.location.global_relative_frame.lon)])
+
+    drones[0].avoid_collision(drones[1])
+    drones[1].avoid_collision(drones[0])
+
+print(coordinates)
+animation.animate_points(coordinates)
+
+
+
+
+
+'''
 startingLocation = Location(vehicle.location.global_relative_frame.lat, vehicle.location.global_relative_frame.lon)
 targetLocation = LocationGlobalRelative(41.714500,-86.241600,0)
 totalDistance = get_distance_meters(startingLocation,targetLocation)
@@ -191,6 +291,7 @@ print("End position: " + str(endLocation.lat) + ", " + str(endLocation.lon))
 
 print("Returning to Launch")
 vehicle.mode = VehicleMode("RTL")
+'''
 
 # Close vehicle object before exiting script
 print("Close vehicle object")
