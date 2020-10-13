@@ -66,6 +66,7 @@ class ned_controller:
             0, 0)  # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
 
         #for x in range(0, duration):
+        print("sending ned?")
         vehicle.send_mavlink(msg)
 
         time.sleep(0.1)
@@ -135,6 +136,6 @@ class ned_controller:
         # rotate p_CT_E so it lines up with current's NED frame
         # we use the transpose so we can go from the Earth's frame to the NED frame
         n, e, d = np.dot(R_EN.T, p_CT_E).ravel()
-
+        
         return Nedvalues(n,e,d)
 
