@@ -53,7 +53,7 @@ def animate_points(my_points):
     ani = animation.FuncAnimation(
         fig,
         update,
-        interval=10,
+        interval=100,
         frames=np.arange(0, 10, 0.01),
         blit=True,
     )

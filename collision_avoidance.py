@@ -62,6 +62,10 @@ class Drone:
         dv.north /= new_mag
         dv.east /= new_mag
         dv.down /= new_mag
+        print("DRONE VECTOR")
+        print(dv.north)
+        print(dv.east)
+        print(dv.down)
 
         dv.north *= self.get_magnitude()
         dv.east *= self.get_magnitude()
@@ -70,11 +74,19 @@ class Drone:
 
     def set_and_send_ned(self, ned): 
         ''' gives the drone a new velocity vector using NED + sets its internal ned attribute '''
+        m = get_ned_mag(ned)
+        ned.north /= m
+        ned.east /= m
+        ned.down /= m
         self.ned = ned
         self.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
 
     def send_ned(self, ned): 
         ''' sends the drone to a new velocity vector using NED '''
+        m = get_ned_mag(ned)
+        ned.north /= m
+        ned.east /= m
+        ned.down /= m
         self.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
 
     def send_to_location(self, location):
@@ -112,9 +124,11 @@ class Drone:
 
         else: 
             self.nudge = None               # if out of range, no longer need a nudge 
-            if not self.ontrack: 
-                self.send_ned(self.ned)         # reroute to the OG ned 
-                self.ontrack = True
+            #if not self.ontrack: 
+            self.send_ned(self.ned)         # reroute to the OG ned 
+            #   self.ontrack = True
+
+            time.sleep(0.01)
         
 
 ################################################################################################
@@ -225,6 +239,9 @@ def get_coords(latitude, longitude, dx, dy):
     print(new_longitude)
     return [new_latitude, new_longitude, 0]
 
+def get_ned_mag(ned_for_mag):
+    return sqrt( (ned_for_mag.north**2) + (ned_for_mag.east**2) + (ned_for_mag.down**2) )
+
 ############################################################################################
 # Main functionality: Example of one NED command
 ############################################################################################
@@ -287,7 +304,7 @@ drones[1].send_to_location(Location(starting_coords[0], starting_coords[1]))
 # nedcontroller.send_ned_velocity(n2.north, n2.east, n2.down, 1, drones[1].vehicle)
 
 start_time = time.time()
-while time.time() - start_time < 20: 
+while time.time() - start_time < 30: 
 
     # save coordinates to plot 
     coordinates.append([(drones[0].vehicle.location.global_relative_frame.lat, 
