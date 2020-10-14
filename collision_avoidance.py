@@ -25,12 +25,13 @@ MIN_DISTANCE = 5       # minimum separation distance
 
 class Drone:
 
-    def __init__(self, vehicle, ned, nedcontroller):
+    def __init__(self, vehicle, ned, nedcontroller, speed):
         self.ned = ned
         self.vehicle = vehicle
         self.target = Nedvalues()
         self.nudge = None
         self.nedcontroller = nedcontroller
+        self.speed = speed
 
     def get_magnitude(self):
         ''' returns the magnitude of the current NED '''
@@ -80,6 +81,9 @@ class Drone:
         ned.north /= m
         ned.east /= m
         ned.down /= m
+        ned.north *= self.speed
+        ned.east *= self.speed
+        ned.down *= self.speed
         self.ned = ned
         self.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
 
@@ -89,6 +93,9 @@ class Drone:
         ned.north /= m
         ned.east /= m
         ned.down /= m
+        ned.north *= self.speed
+        ned.east *= self.speed
+        ned.down *= self.speed
         self.nedcontroller.send_ned_velocity(ned.north, ned.east, ned.down, 1, self.vehicle)
 
     def send_to_location(self, location):
@@ -220,7 +227,7 @@ def get_coords(latitude, longitude, dx, dy):
 
 def usage():
     ''' simple usage function '''
-    print("Usage:\n\tpython collision_avoidance.py [1|2|3]\n")
+    print("Usage:\n\tpython collision_avoidance.py [1|2|3] speed\n\tspeed: drone speed in m/s. Suggested value = 1")
     sys.exit(0)
 
 
@@ -228,7 +235,7 @@ def usage():
 # Main functionality: Collision testing with two drones
 ############################################################################################
 if __name__ == '__main__':
-    if len(sys.argv) < 2 or len(sys.argv) > 2 or (sys.argv[1] != '1' and sys.argv[1] != '2' and sys.argv[1] != '3'):
+    if len(sys.argv) < 3 or len(sys.argv) > 3 or (sys.argv[1] != '1' and sys.argv[1] != '2' and sys.argv[1] != '3'):
         usage()
 
     print("Conducting test %s:" % sys.argv[1])
@@ -238,6 +245,7 @@ if __name__ == '__main__':
         print("Two drones fly parallel with a 5 meter distance between them")
     elif sys.argv[1] == '3':
         print("Two drones fly parallel with a 1 meter distance between them")
+    speed = float(sys.argv[2])
 
     drones = []
     coordinates = []
@@ -258,22 +266,22 @@ if __name__ == '__main__':
 
     if sys.argv[1] == '1':
         vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
-        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller,speed))
 
         targetLocation = LocationGlobalRelative(41.715115, -86.241615, 10) 
 
         vehicle, sitl = connect_virtual_vehicle(2,(test_coords_1)) 
-        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller,speed))
     else:
         vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
-        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller,speed))
 
         targetLocation = LocationGlobalRelative(41.715115, -86.241615, 10) 
         if sys.argv[1] == '2':
             vehicle, sitl = connect_virtual_vehicle(2,(test_coords_2))
         else:
             vehicle, sitl = connect_virtual_vehicle(2,(test_coords_5))
-        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller,speed))
 
     # have drones takeoff and get to an altitude of 10 m
     for drone in drones:
