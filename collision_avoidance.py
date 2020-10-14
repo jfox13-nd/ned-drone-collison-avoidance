@@ -8,7 +8,6 @@ Added code for flying using NED Velocity Vectors - Jane Cleland-Huang 1/15/18
 import math
 import os
 import time
-import geopy
 from math import sin, cos, atan2, radians, sqrt, hypot
 from random import randrange
 import animation
@@ -40,27 +39,6 @@ class Drone:
     def get_ned_mag(self, ned_for_mag):
         ''' Return a magnitude given ned values '''
         return sqrt( (ned_for_mag.north**2) + (ned_for_mag.east**2) + (ned_for_mag.down**2) )
-    
-    def set_random_nudge(self):
-        ''' set a random velocity vector with a magnitude that is 1% of the drone's current velocity's magnitude '''
-        mag = self.get_magnitude()
-        nudge_mag = mag / 100
-        vector_to_nudge = randrange(2)
-
-        new_ned = Nedvalues()
-        new_ned.north = self.ned.north
-        new_ned.east = self.ned.east
-        new_ned.down = self.ned.down
-        neg_or_pos = randrange(1)
-        if neg_or_pos == 0:
-            neg_or_pos = -1
-
-        if vector_to_nudge == 0:
-            new_ned.north += neg_or_pos * nudge_mag
-        else: 
-            new_ned.east += neg_or_pos * nudge_mag
-
-        self.nudge = new_ned
 
     def drone_vector(self, drone_b):
         ''' this method returns a ned vector for drone a that avoids collision of a drone b '''
@@ -115,10 +93,7 @@ class Drone:
     def avoid_collision(self, drone_b): 
         ''' call this repeatedly in main to check if drones are within range '''
         if self.within_range(drone_b):      # if the two drones are within range...
-            if not self.nudge:                  # if no nudge has yet been set...
-                self.set_random_nudge()             # set a random nudge 
             new_ned = Nedvalues()
-            #self.combine_ned(new_ned, self.nudge)
             self.combine_ned(new_ned, self.ned)
             self.combine_ned(new_ned, self.drone_vector(drone_b))
             self.send_ned(new_ned)
@@ -240,7 +215,7 @@ if __name__ == '__main__':
 
     print("Conducting test %s:" % sys.argv[1])
     if sys.argv[1] == '1':
-        print("Two drones approach each other from 40 meter")
+        print("Two drones approach each other from 40 meters")
     elif sys.argv[1] == '2':
         print("Two drones fly parallel with a 5 meter distance between them")
     elif sys.argv[1] == '3':
