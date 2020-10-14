@@ -65,8 +65,6 @@ class ned_controller:
             0, 0, 0,  # x, y, z acceleration (not supported yet, ignored in GCS_Mavlink)
             0, 0)  # yaw, yaw_rate (not supported yet, ignored in GCS_Mavlink)
 
-        #for x in range(0, duration):
-        print("sending ned?")
         vehicle.send_mavlink(msg)
 
         time.sleep(0.1)
