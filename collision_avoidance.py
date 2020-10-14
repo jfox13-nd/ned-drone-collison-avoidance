@@ -12,6 +12,7 @@ import geopy
 from math import sin, cos, atan2, radians, sqrt, hypot
 from random import randrange
 import animation
+import sys
 
 from dronekit import Vehicle, connect, VehicleMode, LocationGlobalRelative
 from dronekit_sitl import SITL
@@ -217,62 +218,115 @@ def get_coords(latitude, longitude, dx, dy):
     new_longitude = longitude + (dx / R_EARTH) * (180 / math.pi) / math.cos(latitude * math.pi/180)
     return [new_latitude, new_longitude, 0]
 
+def usage():
+    ''' simple usage function '''
+    print("Usage:\n\tpython collision_avoidance.py [1|2|3]\n")
+    sys.exit(0)
+
 
 ############################################################################################
 # Main functionality: Collision testing with two drones
 ############################################################################################
-drones = []
-coordinates = []
+if __name__ == '__main__':
+    if len(sys.argv) < 2 or len(sys.argv) > 2 or (sys.argv[1] != '1' and sys.argv[1] != '2' and sys.argv[1] != '3'):
+        usage()
 
-starting_coords = [41.714841, -86.241941, 0]
-test_coords_1 = get_coords(starting_coords[0], starting_coords[1], 20, 20)
+    print("Conducting test %s:" % sys.argv[1])
+    if sys.argv[1] == '1':
+        print("Two drones approach each other from 40 meter")
+    elif sys.argv[1] == '2':
+        print("Two drones fly parallel with a 5 meter distance between them")
+    elif sys.argv[1] == '3':
+        print("Two drones fly parallel with a 1 meter distance between them")
 
-nedcontroller = ned_controller()
+    drones = []
+    coordinates = []
 
-vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
-drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+    starting_coords = [41.714841, -86.241941, 0]
+    test_coords_1 = get_coords(starting_coords[0], starting_coords[1], 20, 20)
+    test_coords_2 = get_coords(starting_coords[0], starting_coords[1], 0, 5)
+    test_coords_3 = get_coords(starting_coords[0], starting_coords[1], 400, 0)
+    test_coords_4 = get_coords(starting_coords[0], starting_coords[1], 400, 5)
+    test_coords_5 = get_coords(starting_coords[0], starting_coords[1], 0, 1)
+    test_coords_6 = get_coords(starting_coords[0], starting_coords[1], 400, 1)
 
-targetLocation = LocationGlobalRelative(41.715115, -86.241615, 10) 
-
-vehicle, sitl = connect_virtual_vehicle(2,(test_coords_1)) 
-drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
-
-# have drones takeoff and get to an altitude of 10 m
-for drone in drones:
-    arm_and_takeoff(10, drone.vehicle)
-time.sleep(10)
-
-print("Sending drone 0")
-drones[0].send_to_location(Location(test_coords_1[0], test_coords_1[1]))
-print("Sending drone 1")
-drones[1].send_to_location(Location(starting_coords[0], starting_coords[1]))
-
-# fly drones for 30 seconds while collecting location data
-start_time = time.time()
-while time.time() - start_time < 30: 
-
-    # save coordinates to plot 
-    coordinates.append([(drones[0].vehicle.location.global_relative_frame.lat, 
-        drones[0].vehicle.location.global_relative_frame.lon), 
-        (drones[1].vehicle.location.global_relative_frame.lat, 
-        drones[1].vehicle.location.global_relative_frame.lon)])
-
-    time.sleep(0.005)
-
-    drones[0].avoid_collision(drones[1])
-    drones[1].avoid_collision(drones[0])
+    window_helper_1 = get_coords(starting_coords[0], starting_coords[1], 0, 10)
+    window_helper_2 = get_coords(starting_coords[0], starting_coords[1], 0, -5)
 
 
-print("Number of coordinates collected:")
-print(len(coordinates))
+    nedcontroller = ned_controller()
 
-print("Starting animation")
-animation.animate_points(coordinates)
+    if sys.argv[1] == '1':
+        vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
 
-# Close vehicle object before exiting script
-print("Close vehicle object")
-vehicle.close()
+        targetLocation = LocationGlobalRelative(41.715115, -86.241615, 10) 
 
-# Shut down simulator if it was started.
-if sitl is not None:
-    sitl.stop()
+        vehicle, sitl = connect_virtual_vehicle(2,(test_coords_1)) 
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+    else:
+        vehicle, sitl = connect_virtual_vehicle(1,(starting_coords)) 
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+
+        targetLocation = LocationGlobalRelative(41.715115, -86.241615, 10) 
+        if sys.argv[1] == '2':
+            vehicle, sitl = connect_virtual_vehicle(2,(test_coords_2))
+        else:
+            vehicle, sitl = connect_virtual_vehicle(2,(test_coords_5))
+        drones.append(Drone(vehicle,Nedvalues(),nedcontroller))
+
+    # have drones takeoff and get to an altitude of 10 m
+    for drone in drones:
+        print("hello")
+        arm_and_takeoff(10, drone.vehicle)
+    time.sleep(10)
+
+    print("Sending drones")
+    if sys.argv[1] == '1':
+        drones[0].send_to_location(Location(test_coords_1[0], test_coords_1[1]))
+        drones[1].send_to_location(Location(starting_coords[0], starting_coords[1]))
+    else:
+        drones[0].send_to_location(Location(test_coords_3[0], test_coords_3[1]))
+        if sys.argv[1] == '2':
+            drones[1].send_to_location(Location(test_coords_4[0], test_coords_4[1]))
+        else:
+            drones[1].send_to_location(Location(test_coords_6[0], test_coords_6[1]))
+
+
+    # fly drones for 30 seconds while collecting location data
+    start_time = time.time()
+    while time.time() - start_time < 30: 
+
+        # save coordinates to plot
+        if sys.argv[1] == '1':
+            coordinates.append([(drones[0].vehicle.location.global_relative_frame.lat, 
+                drones[0].vehicle.location.global_relative_frame.lon), 
+                (drones[1].vehicle.location.global_relative_frame.lat, 
+                drones[1].vehicle.location.global_relative_frame.lon)])
+        else:
+            coordinates.append([(drones[0].vehicle.location.global_relative_frame.lat, 
+                drones[0].vehicle.location.global_relative_frame.lon), 
+                (drones[1].vehicle.location.global_relative_frame.lat, 
+                drones[1].vehicle.location.global_relative_frame.lon),
+                (window_helper_1[0],window_helper_1[1]),
+                (window_helper_2[0],window_helper_2[1])])
+
+        time.sleep(0.005)
+
+        drones[0].avoid_collision(drones[1])
+        drones[1].avoid_collision(drones[0])
+
+
+    print("Number of coordinates collected:")
+    print(len(coordinates))
+
+    print("Starting animation")
+    animation.animate_points(coordinates)
+
+    # Close vehicle object before exiting script
+    print("Close vehicle object")
+    vehicle.close()
+
+    # Shut down simulator if it was started.
+    if sitl is not None:
+        sitl.stop()
